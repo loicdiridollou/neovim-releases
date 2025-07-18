@@ -28,7 +28,7 @@ jobs:
       id: other-tag
       env:
         # Replace with the target repository (owner/repo)
-        TARGET_REPO: "owner/repository-name"
+        TARGET_REPO: "neovim/neovim"
         # Optional: Add token if checking private repos
         # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
