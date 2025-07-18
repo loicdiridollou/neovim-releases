@@ -88,3 +88,23 @@ jobs:
           echo "newer=false" >> $GITHUB_OUTPUT
           echo "ℹ️ Current repo is up to date or newer: $CURRENT (other: $OTHER)"
         fi
+
+    - name: Trigger workflow if newer tag found
+      if: steps.compare.outputs.newer == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const otherTag = '${{ steps.other-tag.outputs.tag }}';
+          
+          // Trigger another workflow in the same repository
+          await github.rest.actions.createWorkflowDispatch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'release.yml', // Replace with your workflow filename
+            ref: 'master', // Replace with your default branch if different
+            inputs: {
+              tag_name: otherTag,
+            }
+          });
+          
+          console.log(`✅ Triggered workflow with new tag: ${otherTag}`);
