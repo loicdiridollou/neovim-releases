@@ -1,0 +1,89 @@
+name: Check for Newer Tag
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  check-newer-tag:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout current repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all tags
+    
+    - name: Get current repo's latest tag
+      id: current-tag
+      run: |
+        # Get the latest tag from current repo
+        CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
+        echo "Current repo latest tag: $CURRENT_TAG"
+    
+    - name: Get other repo's latest tag
+      id: other-tag
+      env:
+        # Replace with the target repository (owner/repo)
+        TARGET_REPO: "owner/repository-name"
+        # Optional: Add token if checking private repos
+        # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Get latest tag from the other repository
+        OTHER_TAG=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/$TARGET_REPO/tags" | \
+          jq -r '.[0].name // "v0.0.0"')
+        echo "tag=$OTHER_TAG" >> $GITHUB_OUTPUT
+        echo "Other repo latest tag: $OTHER_TAG"
+    
+    - name: Compare versions
+      id: compare
+      run: |
+        CURRENT="${{ steps.current-tag.outputs.tag }}"
+        OTHER="${{ steps.other-tag.outputs.tag }}"
+        
+        # Remove 'v' prefix if present for comparison
+        CURRENT_CLEAN=$(echo "$CURRENT" | sed 's/^v//')
+        OTHER_CLEAN=$(echo "$OTHER" | sed 's/^v//')
+        
+        # Function to compare semantic versions
+        compare_versions() {
+          if [[ $1 == $2 ]]; then
+            return 0
+          fi
+          local IFS=.
+          local i ver1=($1) ver2=($2)
+          # Fill empty fields with zeros
+          for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+            ver1[i]=0
+          done
+          for ((i=${#ver2[@]}; i<${#ver1[@]}; i++)); do
+            ver2[i]=0
+          done
+          for ((i=0; i<${#ver1[@]}; i++)); do
+            if [[ -z ${ver2[i]} ]]; then
+              ver2[i]=0
+            fi
+            if ((10#${ver1[i]} > 10#${ver2[i]})); then
+              return 1
+            fi
+            if ((10#${ver1[i]} < 10#${ver2[i]})); then
+              return 2
+            fi
+          done
+          return 0
+        }
+        
+        compare_versions "$CURRENT_CLEAN" "$OTHER_CLEAN"
+        result=$?
+        
+        if [[ $result -eq 2 ]]; then
+          echo "newer=true" >> $GITHUB_OUTPUT
+          echo "✅ Other repo has newer tag: $OTHER (current: $CURRENT)"
+        else
+          echo "newer=false" >> $GITHUB_OUTPUT
+          echo "ℹ️ Current repo is up to date or newer: $CURRENT (other: $OTHER)"
+        fi
