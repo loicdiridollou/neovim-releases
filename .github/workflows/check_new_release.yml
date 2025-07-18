@@ -78,8 +78,11 @@ jobs:
           return 0
         }
         
+        # Compare versions and capture result without failing the step
+        set +e  # Disable exit on error
         compare_versions "$CURRENT_CLEAN" "$OTHER_CLEAN"
         result=$?
+        set -e  # Re-enable exit on error
         
         if [[ $result -eq 2 ]]; then
           echo "newer=true" >> $GITHUB_OUTPUT
